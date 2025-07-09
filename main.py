@@ -15,13 +15,17 @@ player_velocity = 5
 rain_width = 10
 rain_height = 20
 rain_vel = 3
+BG = pygame.image.load("Assests/10.png")
+BG = pygame.transform.scale(BG , (Width , Height))
+original_img = pygame.image.load("Assests/raindrop.png").convert_alpha()
+raindrop_img = pygame.transform.scale(original_img , (12,20))
 
 
 FONT = pygame.font.SysFont("ithaca",30)
 
 def draw(player , elapsed_time , rain):
     WIN.fill((30, 30, 30))  # Dark gray background
-    # WIN.blit() # BG , co-ordinate
+    # WIN.blit(BG , (0,0)) # BG , co-ordinate
     
     time_text = FONT.render(f"TIME : {round(elapsed_time)}s",1,"white")
     WIN.blit(time_text,(10,10)) # displaying the font
@@ -29,7 +33,7 @@ def draw(player , elapsed_time , rain):
     pygame.draw.rect(WIN , "red", player)
     
     for drop in rain:
-        pygame.draw.rect(WIN , "white" , drop)
+        WIN.blit(raindrop_img , (drop.x,drop.y))
     
     pygame.display.update()
 
@@ -81,8 +85,18 @@ def mainGame():
                 run = False
                 hit = True
                 break
+        
+        if hit:
+            lost_text = FONT.render("YOU LOST",True,"white")
+            WIN.blit(lost_text , (Width/2 - lost_text.get_width()/2 , Height/2 - lost_text.get_height()/2))
+            pygame.display.update()
             
-                   
+            waiting = True
+            while waiting:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
+                        waiting = False 
+             
         draw(player , elapsed_time , rain_drops)
         
     pygame.quit()
