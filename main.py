@@ -1,149 +1,188 @@
-import pygame 
-import time
+import pygame
 import random
-pygame.font.init() # font module 
+import sys
 
-Width , Height = 1000 , 800 # in px , window ko resolution 
-WIN = pygame.display.set_mode((Width,Height)) # making the window 
-pygame.display.set_caption("Rain Dodge")
+# Initialize Pygame
+pygame.init()
 
-# BG = pygame.image.load(...)
+# Screen dimensions
+WIDTH, HEIGHT = 800, 900
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Raindodge")
 
-#Constants
-player_width = 40
-player_height = 60
-player_velocity = 5
-rain_width = 10
-rain_height = 20
-rain_vel = 3
+# Raindrop properties
+raindrop_width, raindrop_height = 20, 40
+raindrop_speed = 5
+raindrops = []
 
-#Backgrounds
-BG = pygame.image.load("assets/10.png")
-BG = pygame.transform.scale(BG , (Width , Height))
-# original_img = pygame.image.load("assets/raindrop.png").convert_alpha()
-# raindrop_img = pygame.transform.scale(original_img , (12,25))
+# Load images
+original_image = pygame.image.load("assets/raindrop.png").convert_alpha()
+raindrop_image = pygame.transform.scale(original_image, (raindrop_width, raindrop_height))
+sprite_sheet = pygame.image.load("assets/Dino.png").convert_alpha()
 
-# FONTS LOAD 
-FONT = pygame.font.SysFont("ithaca",30)
+# Sprite properties
+frame_width, frame_height = 24, 24
+scaled_width, scaled_height = 64, 48
+num_frames = 24
+frames = [
+    pygame.transform.scale(
+        sprite_sheet.subsurface(pygame.Rect(i * frame_width, 0, frame_width, frame_height)),
+        (scaled_width, scaled_height)
+    )
+    for i in range(num_frames)
+]
 
-def draw(player , elapsed_time , rain_drops , rain_frames):
-    # WIN.fill((30, 30, 30))  # Dark gray background
-    WIN.blit(BG , (0,0)) # BG , co-ordinate
-    
-    time_text = FONT.render(f"TIME : {round(elapsed_time)}s",1,"white")
-    WIN.blit(time_text,(10,10)) # displaying the font
-    
-    pygame.draw.rect(WIN , "red", player)
-    
-    for drop in rain_drops:
-        frame = rain_frames[drop["frame"]]
-        WIN.blit(frame , (drop["rect"].x , drop["rect"].y))
-    
-    pygame.display.update()
+# Animation variables
+current_frame = 0
+frame_timer = 0
+facing_left = False
 
-def load_raindrop_frames(path, num_frames):
-    sprite_sheet = pygame.image.load(path).convert_alpha()
-    frame_width = sprite_sheet.get_width() // num_frames
-    frame_height = sprite_sheet.get_height()
+# Colors
+BG_COLOR = (30, 30, 30)
+TEXT_COLOR = (255, 255, 255)
 
-    frames = []
-    for i in range(num_frames):
-        frame = sprite_sheet.subsurface(pygame.Rect(i * frame_width, 0, frame_width, frame_height))
-        frames.append(pygame.transform.scale(frame, (12, 25)))  # Resize if needed
-    return frames
+# Player properties
+player_width, player_height = scaled_width, scaled_height
+player_x = WIDTH // 2 - player_width // 2
+player_y = HEIGHT - player_height - 10
+player_speed = 7
 
+# Font
+font = pygame.font.SysFont("ithaca", 36)
 
-def mainGame():  #main game loop 
-    
-    raindrop_frames = load_raindrop_frames("/home/ank/Documents/Python/assets/raindrop-spritesheets.png", 4)
+# Clock
+clock = pygame.time.Clock()
 
-    
-    run = True
-    hit = False
-    
-    player = pygame.Rect(200 , Height-player_height , player_width , player_height) # x , y , width , height
-    
-    clock = pygame.time.Clock()
-    
-    start_time = time.time()
-    elapsed_time = 0
-    
-    rain_increment = 2000 # in millisec
-    rain_count = 0 
-    
-    rain_drops = []
-    
-    while run:
-        rain_count += clock.tick(60) # fps = 60
-        elapsed_time = time.time() - start_time
-        
-        if rain_count > rain_increment:
-            for _ in range(3):
-                rain_x = random.randint(0, Width - rain_width)
-                drop = {
-                    "rect": pygame.Rect(rain_x, -rain_height, rain_width, rain_height),
-                    "frame": 0,
-                    "timer": 0
-                }
-                rain_drops.append(drop)
-    
-            rain_increment = max(200, rain_increment - 50)
-            rain_count = 0
-        
-        # event handling
-        for event in pygame.event.get(): #pygame.event.get = contains all the events that can be pressed
+# Timer event for raindrops
+ADDRAINDROPEVENT = pygame.USEREVENT + 1
+pygame.time.set_timer(ADDRAINDROPEVENT, 600)
+
+# Score timer
+start_ticks = pygame.time.get_ticks()
+
+def draw_player(x, y):
+    frame = frames[current_frame]
+    if facing_left:
+        frame = pygame.transform.flip(frame, True, False)
+    screen.blit(frame, (x, y))
+
+def draw_raindrop(raindrop):
+    screen.blit(raindrop_image, (raindrop.x, raindrop.y))
+
+def display_text(text, x, y):
+    img = font.render(text, True, TEXT_COLOR)
+    screen.blit(img, (x, y))
+
+def game_over_screen(score):
+    screen.fill(BG_COLOR)
+    display_text("Game Over!", WIDTH // 2 - 80, HEIGHT // 2 - 50)
+    display_text(f"Score: {int(score)} seconds", WIDTH // 2 - 110, HEIGHT // 2)
+    display_text("Press R to Restart or Q to Quit", WIDTH // 2 - 170, HEIGHT // 2 + 50)
+    pygame.display.flip()
+
+def main():
+    global player_x, current_frame, facing_left, raindrops, raindrop_speed, start_ticks
+
+    last_level = 0
+    frame_timer = 0
+    running = True
+    game_over = False
+    final_score = 0
+
+    while running:
+        dt = clock.tick(60)  # 60 FPS
+
+        # Time and difficulty scaling
+        seconds_passed = (pygame.time.get_ticks() - start_ticks) / 1000
+        raindrop_speed = 7 + seconds_passed * 0.2
+
+        # Raindrop chaos mode
+        if seconds_passed > 30 and last_level < 4:
+            spawn_count = 5
+            pygame.time.set_timer(ADDRAINDROPEVENT, 200)
+            last_level = 4
+        elif seconds_passed > 20 and last_level < 3:
+            spawn_count = 4
+            pygame.time.set_timer(ADDRAINDROPEVENT, 300)
+            last_level = 3
+        elif seconds_passed > 10 and last_level < 2:
+            spawn_count = 3
+            pygame.time.set_timer(ADDRAINDROPEVENT, 400)
+            last_level = 2
+        elif seconds_passed > 5 and last_level < 1:
+            spawn_count = 2
+            pygame.time.set_timer(ADDRAINDROPEVENT, 500)
+            last_level = 1
+        else:
+            spawn_count = 1
+
+        for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                run = False
-                break
-          
-        keys = pygame.key.get_pressed() # player movement
-        if (keys[pygame.K_LEFT] or keys[pygame.K_a]) and (player.x - player_velocity >=0): # x co-ordinate greater than 0 than we can't move out of the screen
-            player.x -= player_velocity   # moving left to (0,0)
-        if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) and (player.x + player_velocity + player_width<= Width):
-            player.x += player_velocity  # moving right to (1000,0)   
-            
-        for drop in rain_drops[:]:
-            drop["rect"].y += rain_vel
-            drop["timer"] += 1
-            if drop["timer"] >= 5:
-                drop["frame"] = (drop["frame"]+1) % len(raindrop_frames)
-                drop["timer"] = 0
-                
-            
-            if drop["rect"].y > Height:
-                rain_drops.remove(drop)
-            elif drop["rect"].colliderect(player):
-                run = False
-                hit = True
-                break
-        draw(player , elapsed_time , rain_drops , raindrop_frames)
-        
-        
-        # GAME OVER SCREEN 
-        if hit:
-            lost_text = FONT.render("YOU LOST",True,"white")
-            center_x = Width / 2 - lost_text.get_width() / 2
-            center_y = Height / 2 - lost_text.get_height() / 2
-            
-            shadow = FONT.render("YOU LOST",True , "black")
-            WIN.blit(shadow , (center_x + 3 , center_y + 3))
-            WIN.blit(lost_text , (center_x , center_y))
-            
-            press_text = FONT.render("Press SPACE to quit" , True , "gray")
-            WIN.blit(press_text , (Width/2 - press_text.get_width()/2 , center_y + 60))
-            
-            pygame.display.update()
-            
-            waiting = True
-            while waiting:
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        waiting = False
-                        
-                    if event.type == pygame.K_SPACE and event.type == pygame.KEYDOWN :
-                        waiting = False 
-             
+                running = False
+
+            if event.type == ADDRAINDROPEVENT and not game_over:
+                for _ in range(spawn_count):
+                    drop_x = random.randint(0, WIDTH - raindrop_width)
+                    drop = pygame.Rect(drop_x, 0, raindrop_width, raindrop_height)
+                    raindrops.append(drop)
+
+            if game_over:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r:
+                        raindrops.clear()
+                        player_x = WIDTH // 2 - player_width // 2
+                        raindrop_speed = 5
+                        start_ticks = pygame.time.get_ticks()
+                        game_over = False
+                    elif event.key == pygame.K_q:
+                        running = False
+
+        keys = pygame.key.get_pressed()
+
+        if not game_over:
+            # Player movement
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                player_x -= player_speed
+                facing_left = True
+            elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                player_x += player_speed
+                facing_left = False
+
+            player_x = max(0, min(WIDTH - player_width, player_x))
+
+            # Animate player
+            frame_timer += dt
+            if frame_timer >= 100:
+                current_frame = (current_frame + 1) % len(frames)
+                frame_timer = 0
+
+            # Move raindrops
+            for drop in raindrops:
+                drop.y += raindrop_speed
+
+            # Remove off-screen raindrops
+            raindrops = [drop for drop in raindrops if drop.y < HEIGHT]
+
+            # Check for collision
+            player_rect = pygame.Rect(player_x, player_y, player_width, player_height)
+            for drop in raindrops:
+                if player_rect.colliderect(drop):
+                    game_over = True
+                    final_score = seconds_passed
+                    break
+
+            # Draw everything
+            screen.fill(BG_COLOR)
+            draw_player(player_x, player_y)
+            for drop in raindrops:
+                draw_raindrop(drop)
+            display_text(f"Time: {int(seconds_passed)}s", 10, 10)
+            pygame.display.flip()
+        else:
+            game_over_screen(final_score)
+
     pygame.quit()
-    
+    sys.exit()
+
 if __name__ == "__main__":
-    mainGame() 
+    main()
