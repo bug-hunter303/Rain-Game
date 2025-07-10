@@ -55,7 +55,8 @@ def load_raindrop_frames(path, num_frames):
 
 def mainGame():  #main game loop 
     
-    raindrop_frames = load_raindrop_frames("assets/raindrop_spritesheets.png")
+    raindrop_frames = load_raindrop_frames("/home/ank/Documents/Python/assets/raindrop-spritesheets.png", 4)
+
     
     run = True
     hit = False
@@ -102,27 +103,46 @@ def mainGame():  #main game loop
             player.x += player_velocity  # moving right to (1000,0)   
             
         for drop in rain_drops[:]:
-            drop.y += rain_vel
-            if drop.y > Height:
+            drop["rect"].y += rain_vel
+            drop["timer"] += 1
+            if drop["timer"] >= 5:
+                drop["frame"] = (drop["frame"]+1) % len(raindrop_frames)
+                drop["timer"] = 0
+                
+            
+            if drop["rect"].y > Height:
                 rain_drops.remove(drop)
-            elif drop.y + drop.height >= player.y and drop.colliderect(player):
+            elif drop["rect"].colliderect(player):
                 run = False
                 hit = True
                 break
+        draw(player , elapsed_time , rain_drops , raindrop_frames)
         
+        
+        # GAME OVER SCREEN 
         if hit:
             lost_text = FONT.render("YOU LOST",True,"white")
-            WIN.blit(lost_text , (Width/2 - lost_text.get_width()/2 , Height/2 - lost_text.get_height()/2))
+            center_x = Width / 2 - lost_text.get_width() / 2
+            center_y = Height / 2 - lost_text.get_height() / 2
+            
+            shadow = FONT.render("YOU LOST",True , "black")
+            WIN.blit(shadow , (center_x + 3 , center_y + 3))
+            WIN.blit(lost_text , (center_x , center_y))
+            
+            press_text = FONT.render("Press SPACE to quit" , True , "gray")
+            WIN.blit(press_text , (Width/2 - press_text.get_width()/2 , center_y + 60))
+            
             pygame.display.update()
             
             waiting = True
             while waiting:
                 for event in pygame.event.get():
-                    if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
+                    if event.type == pygame.QUIT:
+                        waiting = False
+                        
+                    if event.type == pygame.K_SPACE and event.type == pygame.KEYDOWN :
                         waiting = False 
              
-        draw(player , elapsed_time , rain_drops)
-        
     pygame.quit()
     
 if __name__ == "__main__":
