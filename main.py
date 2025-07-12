@@ -1,6 +1,7 @@
 import pygame
 import random
 import sys
+import os
 
 # Initialize Pygame
 pygame.init()
@@ -9,6 +10,20 @@ pygame.init()
 WIDTH, HEIGHT = 800, 900
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Raindodge")
+
+# Load GIF background frames (PNG sequence)
+bg_frames = []
+bg_folder = "assets/frames"
+for file in sorted(os.listdir(bg_folder)):
+    if file.endswith(".png"):
+        frame = pygame.image.load(os.path.join(bg_folder, file)).convert()
+        frame = pygame.transform.scale(frame, (WIDTH, HEIGHT))
+        bg_frames.append(frame)
+
+# Background animation variables
+bg_frame_index = 0
+bg_frame_timer = 0
+bg_frame_delay = 100  # ms between frames
 
 # Raindrop properties
 raindrop_width, raindrop_height = 20, 40
@@ -38,7 +53,6 @@ frame_timer = 0
 facing_left = False
 
 # Colors
-BG_COLOR = (30, 30, 30)
 TEXT_COLOR = (255, 255, 255)
 
 # Player properties
@@ -48,7 +62,7 @@ player_y = HEIGHT - player_height - 10
 player_speed = 7
 
 # Font
-font = pygame.font.SysFont("ithaca", 36)
+font = pygame.font.SysFont("arial", 36)
 
 # Clock
 clock = pygame.time.Clock()
@@ -60,28 +74,43 @@ pygame.time.set_timer(ADDRAINDROPEVENT, 600)
 # Score timer
 start_ticks = pygame.time.get_ticks()
 
+
 def draw_player(x, y):
     frame = frames[current_frame]
     if facing_left:
         frame = pygame.transform.flip(frame, True, False)
     screen.blit(frame, (x, y))
 
+
 def draw_raindrop(raindrop):
     screen.blit(raindrop_image, (raindrop.x, raindrop.y))
+
 
 def display_text(text, x, y):
     img = font.render(text, True, TEXT_COLOR)
     screen.blit(img, (x, y))
 
+
 def game_over_screen(score):
-    screen.fill(BG_COLOR)
-    display_text("Game Over!", WIDTH // 2 - 80, HEIGHT // 2 - 50)
-    display_text(f"Score: {int(score)} seconds", WIDTH // 2 - 110, HEIGHT // 2)
-    display_text("Press R to Restart or Q to Quit", WIDTH // 2 - 170, HEIGHT // 2 + 50)
+    # Draw the current background frame
+    screen.blit(bg_frames[bg_frame_index], (0, 0))
+
+    # Add a semi-transparent black overlay
+    overlay = pygame.Surface((WIDTH, HEIGHT))
+    overlay.set_alpha(180)  # 0 (transparent) to 255 (opaque)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+
+    # Display text
+    display_text("GAME OVER", WIDTH // 2 - 120, HEIGHT // 2 - 80)
+    display_text(f"Score: {int(score)} seconds", WIDTH // 2 - 140, HEIGHT // 2 - 20)
+    display_text("Press R to Restart", WIDTH // 2 - 140, HEIGHT // 2 + 40)
+    display_text("Press Q to Quit", WIDTH // 2 - 130, HEIGHT // 2 + 90)
     pygame.display.flip()
 
 def main():
     global player_x, current_frame, facing_left, raindrops, raindrop_speed, start_ticks
+    global bg_frame_index, bg_frame_timer
 
     last_level = 0
     frame_timer = 0
@@ -91,6 +120,12 @@ def main():
 
     while running:
         dt = clock.tick(60)  # 60 FPS
+
+        # Update background animation
+        bg_frame_timer += dt
+        if bg_frame_timer >= bg_frame_delay:
+            bg_frame_index = (bg_frame_index + 1) % len(bg_frames)
+            bg_frame_timer = 0
 
         # Time and difficulty scaling
         seconds_passed = (pygame.time.get_ticks() - start_ticks) / 1000
@@ -172,7 +207,7 @@ def main():
                     break
 
             # Draw everything
-            screen.fill(BG_COLOR)
+            screen.blit(bg_frames[bg_frame_index], (0, 0))
             draw_player(player_x, player_y)
             for drop in raindrops:
                 draw_raindrop(drop)
@@ -183,6 +218,7 @@ def main():
 
     pygame.quit()
     sys.exit()
+
 
 if __name__ == "__main__":
     main()
